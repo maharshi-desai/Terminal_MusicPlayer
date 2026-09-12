@@ -1,12 +1,10 @@
 const { spawn } = require("child_process");
 const fs = require("fs");
 const process = require("process");
-const readline = require("readline");
 
 // ---------------- SONGS ----------------
 
 const path = "./songs";
-
 const songs = fs.readdirSync(path).filter((song) => song.endsWith(".mp3"));
 
 let selected = 1;
@@ -29,15 +27,15 @@ function showSongs() {
 
   console.log("Songs:\n");
 
-  for (let i = 0; i < songs.length; i++) {
-    const name = songs[i].replace(".mp3", "");
+  songs.forEach((song, index) => {
+    const name = song.replace(".mp3", "");
 
-    if (selected === i + 1) {
-      console.log(`➡ ${i + 1}. ${name}`);
+    if (selected === index + 1) {
+      console.log(`➡ ${index + 1}. ${name}`);
     } else {
-      console.log(`   ${i + 1}. ${name}`);
+      console.log(`   ${index + 1}. ${name}`);
     }
-  }
+  });
 
   console.log("\n-----------------------------");
 
@@ -71,7 +69,6 @@ function getDuration(song) {
 
   info.stdout.on("data", (data) => {
     const text = data.toString();
-
     const match = text.match(/estimated duration: ([0-9.]+)/);
 
     if (match) {
@@ -90,7 +87,7 @@ function startProgress() {
     if (!isPaused) {
       elapsed++;
 
-      if (elapsed >= duration) {
+      if (elapsed >= duration && duration > 0) {
         clearInterval(progressTimer);
         progressTimer = null;
       }
@@ -103,10 +100,23 @@ function startProgress() {
 // ---------------- PLAYER ----------------
 
 function player(songNumber) {
+  // Stop currently playing song first
   if (childProcess) {
-    childProcess.kill();
+    childProcess.removeAllListeners("close");
+
+    childProcess.once("close", () => {
+      childProcess = null;
+      startPlayer(songNumber);
+    });
+
+    childProcess.kill("SIGKILL");
+    return;
   }
 
+  startPlayer(songNumber);
+}
+
+function startPlayer(songNumber) {
   clearInterval(progressTimer);
 
   elapsed = 0;
@@ -155,11 +165,13 @@ function resume() {
 // ---------------- QUIT ----------------
 
 function quit() {
-  if (childProcess) {
-    childProcess.kill();
-  }
-
   clearInterval(progressTimer);
+
+  if (childProcess) {
+    childProcess.removeAllListeners("close");
+    childProcess.kill("SIGKILL");
+    childProcess = null;
+  }
 
   process.stdin.setRawMode(false);
   process.stdin.pause();
@@ -180,21 +192,25 @@ process.stdin.on("data", (input) => {
   // Quit
   if (input === "q") {
     quit();
+    return;
   }
 
   // Pause
   if (input === "p") {
     pause();
+    return;
   }
 
   // Resume
   if (input === "r") {
     resume();
+    return;
   }
 
   // Enter key
   if (input === "\r") {
     player(selected);
+    return;
   }
 
   // Up Arrow
@@ -203,6 +219,7 @@ process.stdin.on("data", (input) => {
       selected--;
       showSongs();
     }
+    return;
   }
 
   // Down Arrow
@@ -211,5 +228,6 @@ process.stdin.on("data", (input) => {
       selected++;
       showSongs();
     }
+    return;
   }
 });
